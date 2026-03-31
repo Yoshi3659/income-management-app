@@ -2,20 +2,138 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>バイト代管理アプリ</title>
+    <title>バイト収入管理</title>
+    <style>
+        /* CSS上部タブの見た目 */
+        nav { background: gray; padding: 10px; }
+        nav button { margin-right: 10px; cursor: pointer; }
+        .page { display: none; padding: 20px; } /* 最初は全部隠す */
+        .active { display: block; } /* 選択中だけ表示する */
+    </style>
 </head>
 <body>
-    <h1>バイト先の設定</h1>
-    
-    <div id="setup-section">
-        <p>バイト先名：<input type="text" id="job-name" placeholder="例：カフェA"></p>
-        <p>基本時給：<input type="number" id="hourly-wage" placeholder="1100"></p>
-        <button id="save-btn">保存する</button>
+
+    <nav>
+        <button onclick="showPage('dashboard')">ダッシュボード</button>
+        <button onclick="showPage('manage')">バイト管理</button>
+        <button onclick="showPage('shift')">シフト</button>
+        <button onclick="showPage('analysis')">収入分析</button>
+    </nav>
+
+    <div id="dashboard" class="page active">
+        <h2>ダッシュボード</h2>
+        <p>今年の累計収入</p>
+        <p>予測年収</p>
+        <p>ーー万の壁まで：あと￥</p><!--ゲージで可視化できるように-->
+        <p>あと約ーー時間働けます※平均時給ーー円で計算</p>
+
     </div>
 
-    <hr>
-    <h2>登録済みのバイト先</h2>
-    <ul id="job-list">
-        </ul>
+    <div id="manage" class="page">
+        <h2>バイト先の登録・設定</h2>
+        <div style="background: #f4f4f4; padding: 15px; border-radius: 8px;">
+            <p>バイト先名：<input type="text" id="job-name" placeholder="例：カフェA"></p>
+            <p>基本時給：<input type="number" id="hourly-wage" placeholder="1100"> 円</p>
+            
+            <fieldset>
+                <legend>追加手当の設定</legend>
+                <label><input type="checkbox" id="has-night-bonus"> 深夜手当（22時以降 1.25倍）</label><br>
+                <label><input type="checkbox" id="has-weekend-bonus"> 土日手当あり</label>
+                <input type="number" id="weekend-wage" placeholder="100" style="width: 50px;"> 円アップ
+            </fieldset>
+
+            <button onclick="saveJob()" style="margin-top: 10px; padding: 10px 20px;">この内容で登録する</button>
+        </div>
+
+        <h3>登録済みリスト</h3>
+        <ul id="job-list">
+            </ul>
+    </div>
+
+    <div id="shift" class="page">
+        <h2>シフト</h2>
+        <p>日々の勤務時間を入力する画面です。</p>
+    </div>
+
+    <div id="analysis" class="page">
+        <h2>収入分析</h2>
+        <p>グラフなどを表示する画面です。</p>
+    </div>
+
+    <script>
+        // ボタンを押した時に表示を切り替える魔法（JavaScript）
+        function showPage(pageId) {
+            // 一旦すべてのページを隠す
+            const pages = document.querySelectorAll('.page');
+            pages.forEach(p => p.classList.remove('active'));
+            
+            // 選んだページだけ表示する
+            document.getElementById(pageId).classList.add('active');
+        }
+
+        // アプリ起動時に保存されているデータを読み込む
+        window.onload = function() {
+            displayJobs();
+        };
+
+        function saveJob() {
+            const name = document.getElementById('job-name').value;
+            const wage = document.getElementById('hourly-wage').value;
+            
+            if (name === "" || wage === "") {
+                alert("名前と時給の両方を入力してください");
+                return;
+            }
+
+            // 新しいバイト先オブジェクト
+            const newJob = {
+                name: name,
+                wage: wage,
+            };
+
+            // 1. すでに保存されているリストを取得（なければ空の配列）
+            let jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+
+            // 2. リストに新しいデータを追加
+            jobList.push(newJob);
+
+            // 3. LocalStorageに保存（文字列に変換して保存）
+            localStorage.setItem('myJobs', JSON.stringify(jobList));
+
+            // 4. 画面を更新
+            displayJobs();
+
+            // 入力欄をクリア
+            document.getElementById('job-name').value = "";
+            document.getElementById('hourly-wage').value = "";
+        }
+
+        // 保存されているデータを画面に表示する関数
+        function displayJobs() {
+            const listElement = document.getElementById('job-list');
+            listElement.innerHTML = ""; // 一旦中身を空にする
+
+            const jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+
+            jobList.forEach((job, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <strong>${job.name}</strong> : 時給 ${job.wage}円 
+                    <button onclick="deleteJob(${index})" style="margin-left:10px; color:red;">削除</button>
+                `;
+                listElement.appendChild(li);
+            });
+        }
+
+        // 削除機能
+        function deleteJob(index) {
+            let jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+            jobList.splice(index, 1); // 指定した番号のデータを削除
+            localStorage.setItem('myJobs', JSON.stringify(jobList));
+            displayJobs();
+        }
+
+
+    </script>
 </body>
 </html>
