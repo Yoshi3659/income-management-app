@@ -9,7 +9,35 @@
         nav button { margin-right: 10px; cursor: pointer; }
         .page { display: none; padding: 20px; } /* 最初は全部隠す */
         .active { display: block; } /* 選択中だけ表示する */
+
+        /* 日付入力欄の中の「曜日表示枠」だけを物理的に消す */
+        input[type="date"]::-webkit-datetime-edit-day-of-week-field {
+            display: none !important;
+        }
+
+        /* カッコなどの区切り文字もリセットする */
+        input[type="date"]::-webkit-datetime-edit-text {
+            padding: 0 0.1em;
+        }
+
+
+        /* カレンダー内のイベント（シフト）の見た目調整 */
+        .fc-event {
+            font-size: 0.8em !important; /* 文字を少し小さく */
+            cursor: pointer;             /* 重ねた時に指マークにする */
+            white-space: nowrap;         /* 折り返さない */
+            overflow: hidden;            /* はみ出た分を隠す */
+            text-overflow: ellipsis;     /* はみ出たら「...」にする */
+        }
+
+        /* カレンダー全体の高さを調整（パソコンでも見やすく） */
+        #calendar {
+            max-width: 900px;
+            margin: 20px auto;
+            background: white;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 </head>
 <body>
 
@@ -51,9 +79,43 @@
     </div>
 
     <div id="shift" class="page">
-        <h2>シフト</h2>
-        <p>日々の勤務時間を入力する画面です。</p>
+        <h2>シフト登録</h2>
+        <form id="shift-form" style="background: #eef; padding: 15px; border-radius: 8px;">
+            <div class="form-group">
+                <label>バイト先：</label>
+                <select id="workplace-select" required></select>
+            </div>
+            
+            <div class="form-group">
+                <label for="shift-date">日付：</label>
+                <input type="date" id="shift-date" required>
+            </div>
+            
+            <div class="form-group">
+                <label>時間：</label>
+                <input type="time" id="start-time" required> 〜 
+                <input type="time" id="end-time" required>
+            </div>
+            <div class="form-group">
+                <label>休憩 (分)：</label>
+                <input type="number" id="break-time" value="0" min="0">
+            </div>
+
+            <div id="temp-result" style="margin: 10px 0; font-weight: bold; color: #333;">
+                </div>
+
+            <button type="submit" style="padding: 10px 20px; background: blue; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                計算してシフトを保存
+            </button>
+        </form>
+
+        <h3>保存済みシフト一覧</h3>
+        <div id="shift-list-container">
+            <ul id="shift-display-list"></ul>
+        </div>
+        <div id="calendar" style="margin-top: 20px; background: white; padding: 10px;"></div>
     </div>
+
 
     <div id="analysis" class="page">
         <h2>収入分析</h2>
@@ -71,6 +133,8 @@
             document.getElementById(pageId).classList.add('active');
         }
 
+        //バイト管理のプログラム
+
         // アプリ起動時に保存されているデータを読み込む
         window.onload = function() {
             displayJobs();
@@ -79,7 +143,10 @@
         function saveJob() {
             const name = document.getElementById('job-name').value;
             const wage = document.getElementById('hourly-wage').value;
-            
+            const nightBonus = document.getElementById('has-night-bonus').checked;
+            const weekendBonus = document.getElementById('has-weekend-bonus').checked;
+            const weekendWage = document.getElementById('weekend-wage').value;
+
             if (name === "" || wage === "") {
                 alert("名前と時給の両方を入力してください");
                 return;
@@ -88,7 +155,10 @@
             // 新しいバイト先オブジェクト
             const newJob = {
                 name: name,
-                wage: wage,
+                wage: Number(wage),
+                nightBonus: nightBonus,
+                weekendBonus: weekendBonus,
+                weekendWage: Number(weekendWage || 0)
             };
 
             // 1. すでに保存されているリストを取得（なければ空の配列）
@@ -106,6 +176,9 @@
             // 入力欄をクリア
             document.getElementById('job-name').value = "";
             document.getElementById('hourly-wage').value = "";
+            document.getElementById('has-night-bonus').checked = false;
+            document.getElementById('has-weekend-bonus').checked = false;
+            document.getElementById('weekend-wage').value = "";
         }
 
         // 保存されているデータを画面に表示する関数
@@ -119,9 +192,27 @@
                 const li = document.createElement('li');
                 li.innerHTML = `
                     <strong>${job.name}</strong> : 時給 ${job.wage}円 
+                    ${job.nightBonus ? '(深夜あり)' : ''} 
+                    ${job.weekendBonus ? '(土日+' + job.weekendWage + '円)' : ''}
                     <button onclick="deleteJob(${index})" style="margin-left:10px; color:red;">削除</button>
                 `;
                 listElement.appendChild(li);
+            });
+            // プルダウンも一緒に更新する
+            updateWorkplaceSelect(jobList);
+        }
+
+        // シフト画面のプルダウンを更新する関数
+        function updateWorkplaceSelect(jobList) {
+            const selectElement = document.getElementById('workplace-select');
+            // 初期状態（選択してください）に戻す
+            selectElement.innerHTML = '<option value="">選択してください</option>';
+
+            jobList.forEach((job) => {
+                const option = document.createElement('option');
+                option.value = job.name; // 計算で使いやすいように名前やIDを入れる
+                option.textContent = job.name;
+                selectElement.appendChild(option);
             });
         }
 
@@ -132,6 +223,161 @@
             localStorage.setItem('myJobs', JSON.stringify(jobList));
             displayJobs();
         }
+
+
+        //シフト管理のプログラム
+        document.getElementById('shift-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // ページのリロードを防ぐ
+
+            // 入力値の取得
+            const jobName = document.getElementById('workplace-select').value;
+            const dateVal = document.getElementById('shift-date').value;
+            const startTime = document.getElementById('start-time').value;
+            const endTime = document.getElementById('end-time').value;
+            const breakMin = Number(document.getElementById('break-time').value || 0);
+
+            if (!jobName || !dateVal || !startTime || !endTime) {
+                alert("項目をすべて入力してください");
+                return;
+            }
+
+            // 選択したバイト先のデータを取得
+            const jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+            const selectedJob = jobList.find(j => j.name === jobName);
+
+            // 時間の計算 (分単位で計算すると楽)
+            let start = new Date(`${dateVal}T${startTime}`);
+            let end = new Date(`${dateVal}T${endTime}`);
+            
+            // 日をまたぐ場合の処理
+            if (end <= start) {
+                end.setDate(end.getDate() + 1);
+            }
+
+            // 総労働時間（分）
+            let totalMinutes = (end - start) / (1000 * 60) - breakMin;
+            if (totalMinutes < 0) totalMinutes = 0;
+
+            // 深夜・土日計算
+            const dayOfWeek = new Date(dateVal).getDay();
+            let wage = Number(selectedJob.wage);
+            if (selectedJob.weekendBonus && (dayOfWeek === 0 || dayOfWeek === 6)) {
+                wage += Number(selectedJob.weekendWage);
+            }
+            
+            // (簡易計算例: 本格的な深夜帯分けは前回のロジックをここに適用)
+            const totalPay = Math.round((totalMinutes / 60) * wage); 
+
+            // 保存用オブジェクトの作成
+            const newShift = {
+                jobName: jobName,
+                date: dateVal,
+                start: startTime,
+                end: endTime,
+                totalHours: (totalMinutes / 60).toFixed(2),
+                estimatedPay: totalPay
+            };
+
+            // LocalStorageへ保存
+            let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+            shiftList.push(newShift);
+            localStorage.setItem('myShifts', JSON.stringify(shiftList));
+
+            alert(`保存完了！ 給与目安: ￥${totalPay.toLocaleString()}`);
+            
+            displayShifts(); // 保存後にリスト（カレンダー）を更新
+            this.reset();    // フォームを空にする
+        });
+
+        let calendar; // カレンダーを保持する変数
+
+        // ページ読み込み時にカレンダーを初期化
+        window.onload = function() {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'ja', // 日本語化
+                height: 'auto',
+                eventClick: function(info) {
+                    const index = info.event.extendedProps.index; // データの番号を取得
+                    if (confirm(`「${info.event.title}」を削除しますか？`)) {
+                        deleteShift(index);
+                    }
+                    function deleteShift(index) {
+                        let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+                        shiftList.splice(index, 1); // 指定した番号を消す
+                        localStorage.setItem('myShifts', JSON.stringify(shiftList)); // 保存し直す
+                        
+                        displayShifts(); // ← これでカレンダーとリストを再描画する
+                    }
+                },
+                events: [],   // ここにシフトデータが入る
+            });
+            calendar.render();
+            
+            displayJobs();   // 前からあるバイト先リスト
+            displayShifts(); // 保存済みシフトの読み込み
+        };
+
+        function displayShifts() {
+            // 1. localStorageから最新のデータを取得
+            const shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+            const weeks = ['日', '月', '火', '水', '木', '金', '土'];
+
+            // --- A. カレンダーへの反映 ---
+            if (calendar) {
+                const events = shiftList.map((s, index) => {
+                    return {
+                        title: `${s.jobName} ¥${Number(s.estimatedPay).toLocaleString()}`,
+                        start: s.date,
+                        extendedProps: { index: index }
+                    };
+                });
+                calendar.removeAllEvents();
+                calendar.addEventSource(events);
+            }
+
+            // --- B. 下側の「保存済みリスト」への反映 ---
+            const listElement = document.getElementById('shift-display-list');
+            if (listElement) {
+                listElement.innerHTML = ""; // 一旦リセット
+                
+                // 日付順に並び替えて表示
+                const sortedList = [...shiftList].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                shiftList.forEach((s, index) => {
+                    const dateObj = new Date(s.date);
+                    const dayOfWeek = weeks[dateObj.getDay()];
+                    
+                    const li = document.createElement('li');
+                    li.style.padding = "8px";
+                    li.style.borderBottom = "1px solid #ddd";
+                    li.innerHTML = `
+                        <strong>${s.date}(${dayOfWeek})</strong> ${s.jobName} 
+                        <span style="margin-left:10px;">¥${Number(s.estimatedPay).toLocaleString()}</span>
+                        <button onclick="deleteShift(${index})" style="margin-left:15px; color:red; cursor:pointer;">削除</button>
+                    `;
+                    listElement.appendChild(li);
+                });
+            }
+        }
+
+        // 削除用の関数（これも確認してください）
+        function deleteShift(index) {
+            if (!confirm("このシフトを削除してもよろしいですか？")) return;
+
+            let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+            shiftList.splice(index, 1); // 指定した位置のデータを1件消す
+            localStorage.setItem('myShifts', JSON.stringify(shiftList)); // 保存
+            
+            displayShifts(); // 画面を更新（カレンダーとリスト両方）
+        }
+
+
+
+
+
+        
 
 
     </script>
