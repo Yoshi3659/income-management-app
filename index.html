@@ -79,18 +79,15 @@
     </div>
 
     <div id="shift" class="page">
-        <h2>シフト登録</h2>
-        <form id="shift-form" style="background: #eef; padding: 15px; border-radius: 8px;">
-            <div class="form-group">
+    <h2>シフト管理</h2>
+    
+    <dialog id="shift-modal" style="border: none; border-radius: 10px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <h3 id="modal-date-display">日付</h3>
+        <form id="shift-form">
+            <input type="hidden" id="shift-date"> <div class="form-group">
                 <label>バイト先：</label>
                 <select id="workplace-select" required></select>
             </div>
-            
-            <div class="form-group">
-                <label for="shift-date">日付：</label>
-                <input type="date" id="shift-date" required>
-            </div>
-            
             <div class="form-group">
                 <label>時間：</label>
                 <input type="time" id="start-time" required> 〜 
@@ -101,20 +98,20 @@
                 <input type="number" id="break-time" value="0" min="0">
             </div>
 
-            <div id="temp-result" style="margin: 10px 0; font-weight: bold; color: #333;">
-                </div>
-
-            <button type="submit" style="padding: 10px 20px; background: blue; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                計算してシフトを保存
-            </button>
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button type="submit" style="background: blue; color: white; border: none; padding: 10px; border-radius: 5px; flex: 1;">保存</button>
+                <button type="button" onclick="document.getElementById('shift-modal').close()" style="background: #ccc; border: none; padding: 10px; border-radius: 5px;">キャンセル</button>
+            </div>
         </form>
+    </dialog>
 
-        <h3>保存済みシフト一覧</h3>
-        <div id="shift-list-container">
-            <ul id="shift-display-list"></ul>
-        </div>
-        <div id="calendar" style="margin-top: 20px; background: white; padding: 10px;"></div>
+    <div id="calendar"></div>
+
+    <h3>保存済みシフト一覧</h3>
+    <div id="shift-list-container">
+        <ul id="shift-display-list"></ul>
     </div>
+</div>
 
 
     <div id="analysis" class="page">
@@ -296,35 +293,43 @@
             const calendarEl = document.getElementById('calendar');
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
-                locale: 'ja', // 日本語化
+                locale: 'ja',
                 height: 'auto',
+                
+                //　日付をクリックした時の処理
+                dateClick: function(info) {
+                    const modal = document.getElementById('shift-modal');
+                    const dateDisplay = document.getElementById('modal-date-display');
+                    const dateInput = document.getElementById('shift-date');
+
+                    // モーダルの中に日付を表示・保持
+                    dateDisplay.textContent = info.dateStr + " のシフト登録";
+                    dateInput.value = info.dateStr;
+
+                    // モーダルを表示
+                    modal.showModal(); 
+                },
+
                 eventClick: function(info) {
-                    const index = info.event.extendedProps.index; // データの番号を取得
+                    const index = info.event.extendedProps.index;
                     if (confirm(`「${info.event.title}」を削除しますか？`)) {
                         deleteShift(index);
                     }
-                    function deleteShift(index) {
-                        let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
-                        shiftList.splice(index, 1); // 指定した番号を消す
-                        localStorage.setItem('myShifts', JSON.stringify(shiftList)); // 保存し直す
-                        
-                        displayShifts(); // ← これでカレンダーとリストを再描画する
-                    }
                 },
-                events: [],   // ここにシフトデータが入る
+                events: [],
             });
             calendar.render();
             
-            displayJobs();   // 前からあるバイト先リスト
-            displayShifts(); // 保存済みシフトの読み込み
+            displayJobs();
+            displayShifts();
         };
 
         function displayShifts() {
-            // 1. localStorageから最新のデータを取得
+            // localStorageから最新のデータを取得
             const shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
             const weeks = ['日', '月', '火', '水', '木', '金', '土'];
 
-            // --- A. カレンダーへの反映 ---
+            // カレンダーへの反映
             if (calendar) {
                 const events = shiftList.map((s, index) => {
                     return {
@@ -337,7 +342,7 @@
                 calendar.addEventSource(events);
             }
 
-            // --- B. 下側の「保存済みリスト」への反映 ---
+            // 下側の「保存済みリスト」への反映
             const listElement = document.getElementById('shift-display-list');
             if (listElement) {
                 listElement.innerHTML = ""; // 一旦リセット
@@ -372,13 +377,6 @@
             
             displayShifts(); // 画面を更新（カレンダーとリスト両方）
         }
-
-
-
-
-
-        
-
 
     </script>
 </body>
