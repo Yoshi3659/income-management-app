@@ -5,8 +5,8 @@
     <title>バイト収入管理</title>
     <style>
         /* CSS上部タブの見た目 */
-        nav { background: gray; padding: 10px; }
-        nav button { margin-right: 10px; cursor: pointer; }
+        nav { background: #333; padding: 10px; }
+        nav button { margin-right: 10px; cursor: pointer; padding: 8px 16px; background: #fff; border: none; border-radius: 4px; font-weight: bold; }
         .page { display: none; padding: 20px; } /* 最初は全部隠す */
         .active { display: block; } /* 選択中だけ表示する */
 
@@ -20,14 +20,13 @@
             padding: 0 0.1em;
         }
 
-
         /* カレンダー内のイベント（シフト）の見た目調整 */
         .fc-event {
             font-size: 0.8em !important; /* 文字を少し小さく */
-            cursor: pointer;             /* 重ねた時に指マークにする */
-            white-space: nowrap;         /* 折り返さない */
+            cursor: pointer;            /* 重ねた時に指マークにする */
+            white-space: nowrap;        /* 折り返さない */
             overflow: hidden;            /* はみ出た分を隠す */
-            text-overflow: ellipsis;     /* はみ出たら「...」にする */
+            text-overflow: ellipsis;    /* はみ出たら「...」にする */
         }
 
         /* カレンダー全体の高さを調整（パソコンでも見やすく） */
@@ -35,6 +34,48 @@
             max-width: 900px;
             margin: 20px auto;
             background: white;
+        }
+
+        /* ダッシュボードのゲージスタイル */
+        .dashboard-card {
+            background: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+            max-width: 600px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .gauge-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            height: 20px;
+            margin: 6px 0 12px 0;
+            overflow: hidden;
+        }
+        .gauge-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.5s ease-in-out, background-color 0.5s;
+        }
+
+        /* ボタン用共通スタイル */
+        .btn-edit {
+            margin-left: 10px;
+            padding: 2px 8px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .btn-delete {
+            margin-left: 5px;
+            padding: 2px 8px;
+            background: #F44336;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
@@ -48,18 +89,60 @@
         <button onclick="showPage('analysis')">収入分析</button>
     </nav>
 
+    <!-- ダッシュボード画面 -->
     <div id="dashboard" class="page active">
         <h2>ダッシュボード</h2>
-        <p>今年の累計収入</p>
-        <p>予測年収</p>
-        <p>ーー万の壁まで：あと￥</p><!--ゲージで可視化できるように-->
-        <p>あと約ーー時間働けます※平均時給ーー円で計算</p>
+        
+        <div class="dashboard-card">
+            <div style="display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div>
+                    <label for="target-goal-input"><strong>今年の目標額：</strong></label><br>
+                    <input type="number" id="target-goal-input" value="100" step="1" min="0" oninput="updateDashboard()" style="padding: 5px 8px; font-size: 1rem; width: 80px;"> 万円
+                </div>
+                <div>
+                    <label for="target-wall-input"><strong>超えてはダメな壁（上限）：</strong></label><br>
+                    <input type="number" id="target-wall-input" value="130" step="1" min="0" oninput="updateDashboard()" style="padding: 5px 8px; font-size: 1rem; width: 80px;"> 万円
+                </div>
+            </div>
 
+            <p><strong>今年の累計収入：</strong> ￥<span id="dash-total-pay">0</span></p>
+            <p><strong>予測年収：</strong> ￥<span id="dash-projected-pay">0</span></p>
+
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+
+            <!-- 1. 目標表記 ＆ 目標ゲージ -->
+            <div>
+                <p style="margin: 0; color: #1b5e20; font-weight: bold;">
+                    目標（￥<span id="goal-name-label">1,000,000</span>）まで：あと ￥<span id="dash-remaining-goal">0</span>
+                    <span id="goal-percent-text" style="font-weight: normal; font-size: 0.9em; margin-left: 8px;">(0%)</span>
+                </p>
+                <div class="gauge-container">
+                    <div id="goal-gauge-bar" class="gauge-bar" style="background-color: #4CAF50;"></div>
+                </div>
+            </div>
+
+            <!-- 2. 壁表記 ＆ 壁ゲージ -->
+            <div style="margin-top: 10px;">
+                <p style="margin: 0; color: #d32f2f; font-weight: bold;">
+                    壁（￥<span id="wall-name-label">1,300,000</span>）まで：あと ￥<span id="dash-remaining-wall">0</span>
+                    <span id="wall-percent-text" style="font-weight: normal; font-size: 0.9em; margin-left: 8px;">(0%)</span>
+                </p>
+                <div class="gauge-container">
+                    <div id="wall-gauge-bar" class="gauge-bar" style="background-color: #2196F3;"></div>
+                </div>
+            </div>
+
+            <p style="margin-top: 15px;">
+                今の平均時給だと壁まであと約 <strong><span id="dash-remaining-hours">0</span></strong> 時間働けます
+            </p>
+        </div>
     </div>
 
+    <!-- バイト管理画面 -->
     <div id="manage" class="page">
         <h2>バイト先の登録・設定</h2>
         <div style="background: #f4f4f4; padding: 15px; border-radius: 8px;">
+            <input type="hidden" id="edit-job-index" value="-1"> <!-- 編集中のインデックス保持用 -->
             <p>バイト先名：<input type="text" id="job-name" placeholder="例：カフェA"></p>
             <p>基本時給：<input type="number" id="hourly-wage" placeholder="1100"> 円</p>
             
@@ -70,87 +153,196 @@
                 <input type="number" id="weekend-wage" placeholder="100" style="width: 50px;"> 円アップ
             </fieldset>
 
-            <button onclick="saveJob()" style="margin-top: 10px; padding: 10px 20px;">この内容で登録する</button>
+            <div style="margin-top: 10px;">
+                <button id="save-job-btn" onclick="saveJob()" style="padding: 10px 20px;">この内容で登録する</button>
+                <button id="cancel-job-edit-btn" onclick="cancelJobEdit()" style="padding: 10px 20px; display: none; background: #ccc; border: none; border-radius: 4px; margin-left: 10px;">キャンセル</button>
+            </div>
         </div>
 
         <h3>登録済みリスト</h3>
-        <ul id="job-list">
-            </ul>
+        <ul id="job-list"></ul>
     </div>
 
+    <!-- シフト管理画面 -->
     <div id="shift" class="page">
-    <h2>シフト管理</h2>
-    
-    <dialog id="shift-modal" style="border: none; border-radius: 10px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
-        <h3 id="modal-date-display">日付</h3>
-        <form id="shift-form">
-            <input type="hidden" id="shift-date"> <div class="form-group">
-                <label>バイト先：</label>
-                <select id="workplace-select" required></select>
-            </div>
-            <div class="form-group">
-                <label>時間：</label>
-                <input type="time" id="start-time" required> 〜 
-                <input type="time" id="end-time" required>
-            </div>
-            <div class="form-group">
-                <label>休憩 (分)：</label>
-                <input type="number" id="break-time" value="0" min="0">
-            </div>
+        <h2>シフト管理</h2>
+        
+        <dialog id="shift-modal" style="border: none; border-radius: 10px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+            <h3 id="modal-date-display">日付</h3>
+            <form id="shift-form">
+                <input type="hidden" id="shift-date"> 
+                <input type="hidden" id="edit-shift-index" value="-1"> <!-- 編集中のインデックス保持用 -->
+                
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>バイト先：</label>
+                    <select id="workplace-select" required></select>
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>時間：</label>
+                    <input type="time" id="start-time" required> 〜 
+                    <input type="time" id="end-time" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label>休憩 (分)：</label>
+                    <input type="number" id="break-time" value="0" min="0">
+                </div>
 
-            <div style="margin-top: 20px; display: flex; gap: 10px;">
-                <button type="submit" style="background: blue; color: white; border: none; padding: 10px; border-radius: 5px; flex: 1;">保存</button>
-                <button type="button" onclick="document.getElementById('shift-modal').close()" style="background: #ccc; border: none; padding: 10px; border-radius: 5px;">キャンセル</button>
-            </div>
-        </form>
-    </dialog>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button type="submit" id="shift-submit-btn" style="background: blue; color: white; border: none; padding: 10px; border-radius: 5px; flex: 1;">保存</button>
+                    <button type="button" id="modal-delete-btn" onclick="deleteShiftFromModal()" style="background: #F44336; color: white; border: none; padding: 10px; border-radius: 5px; display: none;">削除</button>
+                    <button type="button" onclick="closeShiftModal()" style="background: #ccc; border: none; padding: 10px; border-radius: 5px;">キャンセル</button>
+                </div>
+            </form>
+        </dialog>
 
-    <div id="calendar"></div>
+        <div id="calendar"></div>
 
-    <h3>保存済みシフト一覧</h3>
-    <div id="shift-list-container">
-        <ul id="shift-display-list"></ul>
+        <h3>保存済みシフト一覧</h3>
+        <div id="shift-list-container">
+            <ul id="shift-display-list" style="list-style: none; padding: 0;"></ul>
+        </div>
     </div>
-</div>
 
-
+    <!-- 収入分析画面 -->
     <div id="analysis" class="page">
         <h2>収入分析</h2>
         <p>グラフなどを表示する画面です。</p>
     </div>
 
     <script>
-        // ボタンを押した時に表示を切り替える魔法（JavaScript）
+        let calendar;
+
         function showPage(pageId) {
-            // 一旦すべてのページを隠す
             const pages = document.querySelectorAll('.page');
             pages.forEach(p => p.classList.remove('active'));
             
-            // 選んだページだけ表示する
             document.getElementById(pageId).classList.add('active');
+
+            if (pageId === 'shift' && calendar) {
+                setTimeout(() => calendar.updateSize(), 50);
+            }
+            if (pageId === 'dashboard') {
+                updateDashboard();
+            }
         }
 
-        //バイト管理のプログラム
-
-        // アプリ起動時に保存されているデータを読み込む
         window.onload = function() {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'ja',
+                height: 'auto',
+                
+                dateClick: function(info) {
+                    openShiftModalForCreate(info.dateStr);
+                },
+
+                eventClick: function(info) {
+                    const index = info.event.extendedProps.index;
+                    openShiftModalForEdit(index);
+                },
+                events: [],
+            });
+            calendar.render();
+            
             displayJobs();
+            displayShifts();
+            updateDashboard();
         };
 
+        // --- ダッシュボード ---
+        function updateDashboard() {
+            const shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+            const jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+            
+            // 目標と壁（上限）（万円→円換算）
+            const goalInputVal = Number(document.getElementById('target-goal-input').value);
+            const goalLimit = (isNaN(goalInputVal) || goalInputVal < 0) ? 0 : goalInputVal * 10000;
+
+            const wallInputVal = Number(document.getElementById('target-wall-input').value);
+            const wallLimit = (isNaN(wallInputVal) || wallInputVal < 0) ? 0 : wallInputVal * 10000;
+
+            const currentYear = new Date().getFullYear();
+            let totalPay = 0;
+            shiftList.forEach(s => {
+                const shiftYear = new Date(s.date).getFullYear();
+                if (shiftYear === currentYear) {
+                    totalPay += Number(s.estimatedPay || 0);
+                }
+            });
+
+            const currentMonth = new Date().getMonth() + 1;
+            const projectedPay = currentMonth > 0 ? Math.round((totalPay / currentMonth) * 12) : 0;
+            
+            // 残額計算
+            const remainingGoal = Math.max(0, goalLimit - totalPay);
+            const remainingWall = Math.max(0, wallLimit - totalPay);
+
+            let avgWage = 0;
+            if (jobList.length > 0) {
+                const totalWageSum = jobList.reduce((sum, j) => sum + Number(j.wage), 0);
+                avgWage = totalWageSum / jobList.length;
+            }
+
+            const remainingHours = avgWage > 0 ? (remainingWall / avgWage).toFixed(1) : 0;
+            
+            // 進行度の計算
+            let percentGoal = goalLimit > 0 ? Math.min(100, Math.round((totalPay / goalLimit) * 100)) : 0;
+            let percentWall = wallLimit > 0 ? Math.min(100, Math.round((totalPay / wallLimit) * 100)) : 0;
+
+            // 目標ゲージの幅と色調整
+            const goalGaugeBar = document.getElementById('goal-gauge-bar');
+            goalGaugeBar.style.width = percentGoal + '%';
+            if (percentGoal < 100) {
+                goalGaugeBar.style.backgroundColor = '#4CAF50'; // 緑（進行中）
+            } else {
+                goalGaugeBar.style.backgroundColor = '#2e7d32'; // 濃い緑（目標達成！）
+            }
+
+            // 壁ゲージの幅と色調整
+            const wallGaugeBar = document.getElementById('wall-gauge-bar');
+            wallGaugeBar.style.width = percentWall + '%';
+            if (percentWall < 80) {
+                wallGaugeBar.style.backgroundColor = '#2196F3'; // 青（安全）
+            } else if (percentWall < 100) {
+                wallGaugeBar.style.backgroundColor = '#FFC107'; // 黄（直前注意）
+            } else {
+                wallGaugeBar.style.backgroundColor = '#F44336'; // 赤（到達・超過）
+            }
+
+            // 値の反映
+            document.getElementById('dash-total-pay').textContent = totalPay.toLocaleString();
+            document.getElementById('dash-projected-pay').textContent = projectedPay.toLocaleString();
+            
+            document.getElementById('dash-remaining-goal').textContent = remainingGoal.toLocaleString();
+            document.getElementById('dash-remaining-wall').textContent = remainingWall.toLocaleString();
+            
+            document.getElementById('dash-remaining-hours').textContent = remainingHours;
+            
+            document.getElementById('goal-percent-text').textContent = `(${percentGoal}%)`;
+            document.getElementById('wall-percent-text').textContent = `(${percentWall}%)`;
+            
+            document.getElementById('goal-name-label').textContent = goalLimit.toLocaleString();
+            document.getElementById('wall-name-label').textContent = wallLimit.toLocaleString();
+        }
+
+        // --- バイト管理（登録・編集・削除） ---
         function saveJob() {
-            const name = document.getElementById('job-name').value;
+            const name = document.getElementById('job-name').value.trim();
             const wage = document.getElementById('hourly-wage').value;
             const nightBonus = document.getElementById('has-night-bonus').checked;
             const weekendBonus = document.getElementById('has-weekend-bonus').checked;
             const weekendWage = document.getElementById('weekend-wage').value;
+            const editIndex = Number(document.getElementById('edit-job-index').value);
 
             if (name === "" || wage === "") {
                 alert("名前と時給の両方を入力してください");
                 return;
             }
 
-            // 新しいバイト先オブジェクト
-            const newJob = {
+            let jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+
+            const jobData = {
                 name: name,
                 wage: Number(wage),
                 nightBonus: nightBonus,
@@ -158,75 +350,161 @@
                 weekendWage: Number(weekendWage || 0)
             };
 
-            // 1. すでに保存されているリストを取得（なければ空の配列）
-            let jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+            if (editIndex >= 0) {
+                // 編集（更新）処理
+                const oldJobName = jobList[editIndex].name;
+                jobList[editIndex] = jobData;
 
-            // 2. リストに新しいデータを追加
-            jobList.push(newJob);
+                // もしバイト先名が変わった場合、関連するシフト側のバイト先名も一括更新
+                if (oldJobName !== name) {
+                    let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+                    shiftList.forEach(s => {
+                        if (s.jobName === oldJobName) s.jobName = name;
+                    });
+                    localStorage.setItem('myShifts', JSON.stringify(shiftList));
+                    displayShifts();
+                }
+            } else {
+                // 新規登録処理
+                jobList.push(jobData);
+            }
 
-            // 3. LocalStorageに保存（文字列に変換して保存）
             localStorage.setItem('myJobs', JSON.stringify(jobList));
 
-            // 4. 画面を更新
+            cancelJobEdit();
             displayJobs();
+            updateDashboard();
+        }
 
-            // 入力欄をクリア
+        function editJob(index) {
+            const jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
+            const job = jobList[index];
+
+            if (!job) return;
+
+            document.getElementById('edit-job-index').value = index;
+            document.getElementById('job-name').value = job.name;
+            document.getElementById('hourly-wage').value = job.wage;
+            document.getElementById('has-night-bonus').checked = job.nightBonus;
+            document.getElementById('has-weekend-bonus').checked = job.weekendBonus;
+            document.getElementById('weekend-wage').value = job.weekendWage || "";
+
+            document.getElementById('save-job-btn').textContent = "変更を保存する";
+            document.getElementById('cancel-job-edit-btn').style.display = "inline-block";
+        }
+
+        function cancelJobEdit() {
+            document.getElementById('edit-job-index').value = "-1";
             document.getElementById('job-name').value = "";
             document.getElementById('hourly-wage').value = "";
             document.getElementById('has-night-bonus').checked = false;
             document.getElementById('has-weekend-bonus').checked = false;
             document.getElementById('weekend-wage').value = "";
+
+            document.getElementById('save-job-btn').textContent = "この内容で登録する";
+            document.getElementById('cancel-job-edit-btn').style.display = "none";
         }
 
-        // 保存されているデータを画面に表示する関数
         function displayJobs() {
             const listElement = document.getElementById('job-list');
-            listElement.innerHTML = ""; // 一旦中身を空にする
+            listElement.innerHTML = "";
 
             const jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
 
             jobList.forEach((job, index) => {
                 const li = document.createElement('li');
+                li.style.marginBottom = "8px";
                 li.innerHTML = `
                     <strong>${job.name}</strong> : 時給 ${job.wage}円 
                     ${job.nightBonus ? '(深夜あり)' : ''} 
                     ${job.weekendBonus ? '(土日+' + job.weekendWage + '円)' : ''}
-                    <button onclick="deleteJob(${index})" style="margin-left:10px; color:red;">削除</button>
+                    <button class="btn-edit" onclick="editJob(${index})">編集</button>
+                    <button class="btn-delete" onclick="deleteJob(${index})">削除</button>
                 `;
                 listElement.appendChild(li);
             });
-            // プルダウンも一緒に更新する
             updateWorkplaceSelect(jobList);
         }
 
-        // シフト画面のプルダウンを更新する関数
         function updateWorkplaceSelect(jobList) {
             const selectElement = document.getElementById('workplace-select');
-            // 初期状態（選択してください）に戻す
             selectElement.innerHTML = '<option value="">選択してください</option>';
 
             jobList.forEach((job) => {
                 const option = document.createElement('option');
-                option.value = job.name; // 計算で使いやすいように名前やIDを入れる
+                option.value = job.name;
                 option.textContent = job.name;
                 selectElement.appendChild(option);
             });
         }
 
-        // 削除機能
         function deleteJob(index) {
+            if (!confirm("このバイト先を削除しますか？")) return;
             let jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
-            jobList.splice(index, 1); // 指定した番号のデータを削除
+            jobList.splice(index, 1);
             localStorage.setItem('myJobs', JSON.stringify(jobList));
+            
+            cancelJobEdit();
             displayJobs();
+            updateDashboard();
         }
 
+        // --- シフト管理（新規登録・編集・削除） ---
+        function openShiftModalForCreate(dateStr) {
+            document.getElementById('edit-shift-index').value = "-1";
+            document.getElementById('modal-date-display').textContent = dateStr + " のシフト登録";
+            document.getElementById('shift-date').value = dateStr;
+            document.getElementById('workplace-select').value = "";
+            document.getElementById('start-time').value = "";
+            document.getElementById('end-time').value = "";
+            document.getElementById('break-time').value = "0";
+            document.getElementById('shift-submit-btn').textContent = "保存";
+            
+            // 新規登録時は削除ボタンを非表示
+            document.getElementById('modal-delete-btn').style.display = "none";
 
-        //シフト管理のプログラム
+            document.getElementById('shift-modal').showModal();
+        }
+
+        function openShiftModalForEdit(index) {
+            const shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
+            const shift = shiftList[index];
+
+            if (!shift) return;
+
+            document.getElementById('edit-shift-index').value = index;
+            document.getElementById('modal-date-display').textContent = shift.date + " のシフト編集";
+            document.getElementById('shift-date').value = shift.date;
+            document.getElementById('workplace-select').value = shift.jobName;
+            document.getElementById('start-time').value = shift.start;
+            document.getElementById('end-time').value = shift.end;
+            document.getElementById('break-time').value = shift.breakMin || 0;
+            document.getElementById('shift-submit-btn').textContent = "更新";
+
+            // 編集（既存シフト）時は削除ボタンを表示
+            document.getElementById('modal-delete-btn').style.display = "inline-block";
+
+            document.getElementById('shift-modal').showModal();
+        }
+
+        function closeShiftModal() {
+            document.getElementById('shift-modal').close();
+            document.getElementById('shift-form').reset();
+        }
+
+        // モーダル内の「削除」ボタンを押したときの処理
+        function deleteShiftFromModal() {
+            const editIndex = Number(document.getElementById('edit-shift-index').value);
+            if (editIndex >= 0) {
+                closeShiftModal();
+                deleteShift(editIndex);
+            }
+        }
+
         document.getElementById('shift-form').addEventListener('submit', function(e) {
-            e.preventDefault(); // ページのリロードを防ぐ
+            e.preventDefault();
 
-            // 入力値の取得
+            const editIndex = Number(document.getElementById('edit-shift-index').value);
             const jobName = document.getElementById('workplace-select').value;
             const dateVal = document.getElementById('shift-date').value;
             const startTime = document.getElementById('start-time').value;
@@ -238,98 +516,63 @@
                 return;
             }
 
-            // 選択したバイト先のデータを取得
             const jobList = JSON.parse(localStorage.getItem('myJobs')) || [];
             const selectedJob = jobList.find(j => j.name === jobName);
 
-            // 時間の計算 (分単位で計算すると楽)
+            if (!selectedJob) {
+                alert("選択されたバイト先の情報が見つかりません");
+                return;
+            }
+
             let start = new Date(`${dateVal}T${startTime}`);
             let end = new Date(`${dateVal}T${endTime}`);
             
-            // 日をまたぐ場合の処理
             if (end <= start) {
                 end.setDate(end.getDate() + 1);
             }
 
-            // 総労働時間（分）
             let totalMinutes = (end - start) / (1000 * 60) - breakMin;
             if (totalMinutes < 0) totalMinutes = 0;
 
-            // 深夜・土日計算
             const dayOfWeek = new Date(dateVal).getDay();
             let wage = Number(selectedJob.wage);
             if (selectedJob.weekendBonus && (dayOfWeek === 0 || dayOfWeek === 6)) {
                 wage += Number(selectedJob.weekendWage);
             }
             
-            // (簡易計算例: 本格的な深夜帯分けは前回のロジックをここに適用)
             const totalPay = Math.round((totalMinutes / 60) * wage); 
 
-            // 保存用オブジェクトの作成
-            const newShift = {
+            const shiftData = {
                 jobName: jobName,
                 date: dateVal,
                 start: startTime,
                 end: endTime,
+                breakMin: breakMin,
                 totalHours: (totalMinutes / 60).toFixed(2),
                 estimatedPay: totalPay
             };
 
-            // LocalStorageへ保存
             let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
-            shiftList.push(newShift);
+
+            if (editIndex >= 0) {
+                shiftList[editIndex] = shiftData;
+                alert(`更新完了！ 給与目安: ￥${totalPay.toLocaleString()}`);
+            } else {
+                shiftList.push(shiftData);
+                alert(`保存完了！ 給与目安: ￥${totalPay.toLocaleString()}`);
+            }
+
             localStorage.setItem('myShifts', JSON.stringify(shiftList));
 
-            alert(`保存完了！ 給与目安: ￥${totalPay.toLocaleString()}`);
-            
-            displayShifts(); // 保存後にリスト（カレンダー）を更新
-            this.reset();    // フォームを空にする
+            closeShiftModal();
+            displayShifts();
+            updateDashboard();
         });
 
-        let calendar; // カレンダーを保持する変数
-
-        // ページ読み込み時にカレンダーを初期化
-        window.onload = function() {
-            const calendarEl = document.getElementById('calendar');
-            calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'ja',
-                height: 'auto',
-                
-                //　日付をクリックした時の処理
-                dateClick: function(info) {
-                    const modal = document.getElementById('shift-modal');
-                    const dateDisplay = document.getElementById('modal-date-display');
-                    const dateInput = document.getElementById('shift-date');
-
-                    // モーダルの中に日付を表示・保持
-                    dateDisplay.textContent = info.dateStr + " のシフト登録";
-                    dateInput.value = info.dateStr;
-
-                    // モーダルを表示
-                    modal.showModal(); 
-                },
-
-                eventClick: function(info) {
-                    const index = info.event.extendedProps.index;
-                    if (confirm(`「${info.event.title}」を削除しますか？`)) {
-                        deleteShift(index);
-                    }
-                },
-                events: [],
-            });
-            calendar.render();
-            
-            displayJobs();
-            displayShifts();
-        };
-
         function displayShifts() {
-            // localStorageから最新のデータを取得
             const shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
             const weeks = ['日', '月', '火', '水', '木', '金', '土'];
 
-            // カレンダーへの反映
             if (calendar) {
                 const events = shiftList.map((s, index) => {
                     return {
@@ -342,15 +585,16 @@
                 calendar.addEventSource(events);
             }
 
-            // 下側の「保存済みリスト」への反映
             const listElement = document.getElementById('shift-display-list');
             if (listElement) {
-                listElement.innerHTML = ""; // 一旦リセット
+                listElement.innerHTML = "";
                 
-                // 日付順に並び替えて表示
-                const sortedList = [...shiftList].sort((a, b) => new Date(a.date) - new Date(b.date));
+                // 日付順に表示
+                const sortedWithOriginalIndex = shiftList
+                    .map((s, originalIndex) => ({ ...s, originalIndex }))
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-                shiftList.forEach((s, index) => {
+                sortedWithOriginalIndex.forEach((s) => {
                     const dateObj = new Date(s.date);
                     const dayOfWeek = weeks[dateObj.getDay()];
                     
@@ -358,26 +602,26 @@
                     li.style.padding = "8px";
                     li.style.borderBottom = "1px solid #ddd";
                     li.innerHTML = `
-                        <strong>${s.date}(${dayOfWeek})</strong> ${s.jobName} 
+                        <strong>${s.date}(${dayOfWeek})</strong> ${s.jobName} (${s.start}〜${s.end})
                         <span style="margin-left:10px;">¥${Number(s.estimatedPay).toLocaleString()}</span>
-                        <button onclick="deleteShift(${index})" style="margin-left:15px; color:red; cursor:pointer;">削除</button>
+                        <button class="btn-edit" onclick="openShiftModalForEdit(${s.originalIndex})">編集</button>
+                        <button class="btn-delete" onclick="deleteShift(${s.originalIndex})">削除</button>
                     `;
                     listElement.appendChild(li);
                 });
             }
         }
 
-        // 削除用の関数（これも確認してください）
         function deleteShift(index) {
             if (!confirm("このシフトを削除してもよろしいですか？")) return;
 
             let shiftList = JSON.parse(localStorage.getItem('myShifts')) || [];
-            shiftList.splice(index, 1); // 指定した位置のデータを1件消す
-            localStorage.setItem('myShifts', JSON.stringify(shiftList)); // 保存
+            shiftList.splice(index, 1);
+            localStorage.setItem('myShifts', JSON.stringify(shiftList));
             
-            displayShifts(); // 画面を更新（カレンダーとリスト両方）
+            displayShifts();
+            updateDashboard();
         }
-
     </script>
 </body>
 </html>
